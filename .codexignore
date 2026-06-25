@@ -1,0 +1,26 @@
+# Dependencies, caches, and generated build output
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+.vite-*.log
+
+# Generated previews, screenshots, and source-material collections
+asset_work/
+qa-screenshots/
+UI素材整理/
+UI设计方案/
+ui设计参考/
+ui元素/
+古城素材/
+昭通古城风景/
+
+# Old recovery snapshots kept for manual reference only
+src/*.broken-backup-*.tsx
+src/*.broken-backup-*.css
+src/*.overwritten-*.tsx
+src/*.overwritten-*.css
+
+# Large standalone reference images
+image.png
+home-*.png
