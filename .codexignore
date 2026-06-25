@@ -1,13 +1,22 @@
-# Dependencies, caches, and generated build output
+# Keep Codex focused on source code and config. These rules do not delete files
+# and do not affect what Git can track unless the same rule is also in .gitignore.
+
+# Git internals, dependencies, caches, and generated output
+.git/
 node_modules/
 dist/
 .vite/
 *.tsbuildinfo
+*.log
 .vite-*.log
 
-# Generated previews, screenshots, and source-material collections
+# Generated previews, screenshots, and temporary work areas
 asset_work/
 qa-screenshots/
+/image.png
+/home-*.png
+
+# Large source-material collections
 UI素材整理/
 UI设计方案/
 ui设计参考/
@@ -15,12 +24,36 @@ ui元素/
 古城素材/
 昭通古城风景/
 
+# Mojibake fallbacks left by earlier encoding issues
+UI绱犳潗鏁寸悊/
+UI璁捐鏂规/
+ui璁捐鍙傝€?
+ui鍏冪礌/
+鍙ゅ煄绱犳潗/
+鏄€氬彜鍩庨鏅?
+
 # Old recovery snapshots kept for manual reference only
 src/*.broken-backup-*.tsx
 src/*.broken-backup-*.css
 src/*.overwritten-*.tsx
 src/*.overwritten-*.css
 
-# Large standalone reference images
-image.png
-home-*.png
+# Binary/media files are expensive for Codex context. Source code still refers
+# to these paths, and files remain on disk for the app/build.
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.svg
+*.psd
+*.ai
+*.zip
+*.rar
+*.7z
+*.mp4
+*.mov
+*.avi
+*.docx
+*.pptx
+*.xlsx
