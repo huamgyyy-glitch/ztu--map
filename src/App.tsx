@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, Route, Routes } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, Navigate, Route, Routes, useSearchParams } from "react-router-dom";
+import AMapLoader from "@amap/amap-jsapi-loader";
 import { ArrowRight } from "@phosphor-icons/react/ArrowRight";
 import { BookmarkSimple } from "@phosphor-icons/react/BookmarkSimple";
 import { Camera } from "@phosphor-icons/react/Camera";
@@ -13,35 +14,23 @@ import { PaperPlaneTilt } from "@phosphor-icons/react/PaperPlaneTilt";
 import { Star } from "@phosphor-icons/react/Star";
 import { X } from "@phosphor-icons/react/X";
 import { architectureAsset, cardPhoto, foodAsset, mapAsset } from "./assets";
+import {
+  foodCategoryColor,
+  foodMapCategories,
+  foodMapSpots,
+  foodRouteTimeline,
+  type FoodMapCategory,
+  type FoodMapSpot,
+} from "./data/mapFoodSpots";
+import {
+  cultureCategoryColor,
+  cultureMapCategories,
+  cultureMapSpots,
+  type CultureMapCategory,
+  type CultureMapSpot,
+} from "./data/mapCultureSpots";
 
 const optimizedAsset = (name: string) => `/assets/optimized/${name}`;
-
-type Spot = {
-  id: string;
-  name: string;
-  category: string;
-  title: string;
-  photo: string;
-  x: number;
-  y: number;
-  desc: string;
-  tags: string[];
-  duration: string;
-  openTime: string;
-  audience: string;
-};
-
-const mapSpots: Spot[] = [
-  { id: "guild", name: "广东会馆", category: "古建点", title: "商帮会馆", photo: "wooden-courtyard.jpg", x: 43, y: 48, desc: "始建于清乾隆年间，是昭通重要会馆，木雕精美，建筑格局严谨，见证了昔日商贸繁荣。", tags: ["古建点", "木雕", "会馆"], duration: "30–40分钟", openTime: "09:00–17:30", audience: "历史文化爱好者" },
-  { id: "beizheng", name: "北正街", category: "拍照点", title: "老街烟火", photo: "old-street-walk.jpg", x: 48, y: 20, desc: "古城主街，店铺林立，灯笼与行人把老城日常铺开，是最适合扫街的一段。", tags: ["拍照点", "老街", "逛吃"], duration: "40分钟", openTime: "全天", audience: "街拍爱好者" },
-  { id: "tiaoshui", name: "挑水巷", category: "拍照点", title: "青石小巷", photo: "stone-alley.jpg", x: 33, y: 35, desc: "老巷幽深，青石板路安静清爽，适合寻找古城慢生活。", tags: ["拍照点", "小巷"], duration: "20分钟", openTime: "全天", audience: "慢游旅人" },
-  { id: "li", name: "李氏支祠", category: "古建点", title: "古建院落", photo: "wooden-courtyard.jpg", x: 68, y: 40, desc: "古朴院落与戏台相映，木柱、窗棂和灯笼保留着老城院落的温润气息。", tags: ["古建点", "祠堂"], duration: "25分钟", openTime: "09:00–17:30", audience: "古建爱好者" },
-  { id: "square", name: "箭道广场", category: "拍照点", title: "城市节点", photo: "gate-street.jpg", x: 58, y: 57, desc: "古城街巷交汇的开阔节点，适合拍人文、路牌与古城日常。", tags: ["拍照点", "广场"], duration: "15分钟", openTime: "全天", audience: "亲子与游客" },
-  { id: "wenmiao", name: "文庙", category: "古建点", title: "文脉地标", photo: "ancient-building-night.jpg", x: 56, y: 72, desc: "看斗拱、红墙与星门，感受昭通古城的人文气息。", tags: ["古建点", "人文"], duration: "40分钟", openTime: "09:00–17:30", audience: "历史文化爱好者" },
-  { id: "quma", name: "趣马门", category: "古建点", title: "城门开场", photo: "stone-paifang.jpg", x: 76, y: 67, desc: "城门楼阁舒展，飞檐层叠，是进入古城气韵的一眼开场。", tags: ["古建点", "城门"], duration: "20分钟", openTime: "全天", audience: "第一次来古城的游客" },
-  { id: "doujie", name: "陡街", category: "夜游点", title: "夜色老街", photo: "lantern-street.jpg", x: 30, y: 70, desc: "夜色亮起时，灯笼和屋檐会把画面变得很柔，适合傍晚以后慢慢逛。", tags: ["夜游点", "灯笼"], duration: "30分钟", openTime: "18:00–22:30", audience: "夜游与拍照爱好者" },
-  { id: "food", name: "美食街", category: "美食点", title: "地道烟火", photo: "food-oil-cake-pea-paste.jpg", x: 52, y: 50, desc: "油糕稀豆粉、烧洋芋、小肉串都能在这里找到，一路逛一路吃。", tags: ["美食点", "烟火"], duration: "45分钟", openTime: "07:30–22:00", audience: "吃货与家庭游客" },
-];
 
 const entrances = [
   { to: "/map", tab: "手绘导览", title: "古城手绘地图", desc: "美食点、古建点、拍照点、夜游点一图掌握，导航不迷路！", icon: "home-handdrawn-map.webp", tone: "green" },
@@ -72,14 +61,14 @@ const foodCategories = [
 ];
 
 const foods: FoodItem[] = [
-  { id: "rice", name: "油糕稀豆粉", category: "早餐必吃", photo: "food-oil-cake-pea-paste.jpg", tags: ["酥香", "绵滑", "暖胃"], time: "07:30—10:30", way: "趁热掰开油糕，蘸着稀豆粉吃", highlight: "本地黄豆磨浆，手工油糕现炸，香气浓郁", text: "油糕泡进稀豆粉，一酥一滑，是昭通清晨最舒服的暖意。", likes: "8.2k" },
-  { id: "potato", name: "烧洋芋", category: "街边小吃", photo: "food-fried-potato.jpg", tags: ["软糯", "蘸料香"], time: "10:00—21:00", way: "炭火慢烤后蘸辣椒面吃", highlight: "外焦里糯，越吃越香", text: "炭火烤得焦香，蘸一口辣椒面，越吃越有味。", likes: "7.9k" },
-  { id: "skewer", name: "昭通小肉串", category: "夜宵推荐", photo: "food-meat-skewer.jpg", tags: ["炭火", "鲜辣"], time: "18:00—23:00", way: "刚出炉时配一杯冰饮", highlight: "现烤现卖，油香和辣香一起冒出来", text: "小串现烤，油香和辣香一起冒出来，是夜晚最热闹的味道。", likes: "7.5k" },
-  { id: "rice-noodle", name: "豆花米线", category: "早餐必吃", photo: "food-rice-noodle.jpg", tags: ["豆花细嫩", "米线爽滑"], time: "07:00—11:00", way: "先拌辣椒，再喝一口汤", highlight: "豆花细嫩，米线爽滑，汤鲜味美", text: "豆花细嫩、米线爽滑，汤鲜味美。", likes: "6.5k" },
-  { id: "cool", name: "凉粉", category: "街边小吃", photo: "food-oil-cake-pea-paste.jpg", tags: ["冰凉爽口", "酸辣开胃"], time: "14:00—17:00", way: "加醋加辣，拌匀后入口", highlight: "清凉解暑，低脂时光", text: "冰凉爽口，酸辣开胃，夏日必备。", likes: "6.8k" },
-  { id: "tofu", name: "烤豆腐", category: "街边小吃", photo: "food-meat-skewer.jpg", tags: ["外焦里嫩", "蘸料香"], time: "15:00—22:00", way: "蘸折耳根辣椒蘸水", highlight: "外焦里嫩，秘制蘸料香气扑鼻", text: "外焦里嫩，秘制蘸料香气扑鼻。", likes: "6.2k" },
-  { id: "hotpot", name: "小锅串串", category: "夜宵推荐", photo: "food-fried-potato.jpg", tags: ["麻辣鲜香", "越煮越入味"], time: "18:00—23:30", way: "荤素搭配，慢慢涮", highlight: "锅多味，麻辣鲜香", text: "锅多味，麻辣鲜香，越煮越入味。", likes: "5.9k" },
-  { id: "cold", name: "蘸凉粉", category: "本地经典", photo: "food-rice-noodle.jpg", tags: ["清爽", "咸香"], time: "11:00—18:00", way: "蘸汁浓一点更香", highlight: "清香爽滑，独特的山风风味", text: "奔爽凉粉，清香爽滑，独特的山风风味。", likes: "5.3k" },
+  { id: "rice", name: "油糕稀豆粉", category: "早餐必吃", photo: "food-yougao-xidoufen.jpg", tags: ["酥香", "绵滑", "暖胃"], time: "07:30—10:30", way: "趁热掰开油糕，蘸着稀豆粉吃", highlight: "本地黄豆磨浆，手工油糕现炸，香气浓郁", text: "油糕泡进稀豆粉，一酥一滑，是昭通清晨最舒服的暖意。", likes: "8.2k" },
+  { id: "potato", name: "烧洋芋", category: "街边小吃", photo: "food-shaoyangyu.jpg", tags: ["软糯", "蘸料香"], time: "10:00—21:00", way: "炭火慢烤后蘸辣椒面吃", highlight: "外焦里糯，越吃越香", text: "炭火烤得焦香，蘸一口辣椒面，越吃越有味。", likes: "7.9k" },
+  { id: "skewer", name: "昭通小肉串", category: "夜宵推荐", photo: "food-zhaotong-skewer.jpg", tags: ["炭火", "鲜辣"], time: "18:00—23:00", way: "刚出炉时配一杯冰饮", highlight: "现烤现卖，油香和辣香一起冒出来", text: "小串现烤，油香和辣香一起冒出来，是夜晚最热闹的味道。", likes: "7.5k" },
+  { id: "rice-noodle", name: "豆花米线", category: "早餐必吃", photo: "food-douhua-mixian.jpg", tags: ["豆花细嫩", "米线爽滑"], time: "07:00—11:00", way: "先拌辣椒，再喝一口汤", highlight: "豆花细嫩，米线爽滑，汤鲜味美", text: "豆花细嫩、米线爽滑，汤鲜味美。", likes: "6.5k" },
+  { id: "cool", name: "凉粉", category: "街边小吃", photo: "food-liangfen.jpg", tags: ["冰凉爽口", "酸辣开胃"], time: "14:00—17:00", way: "加醋加辣，拌匀后入口", highlight: "清凉解暑，低脂时光", text: "冰凉爽口，酸辣开胃，夏日必备。", likes: "6.8k" },
+  { id: "tofu", name: "烤豆腐", category: "街边小吃", photo: "food-kaodoufu.jpg", tags: ["外焦里嫩", "蘸料香"], time: "15:00—22:00", way: "蘸折耳根辣椒蘸水", highlight: "外焦里嫩，秘制蘸料香气扑鼻", text: "外焦里嫩，秘制蘸料香气扑鼻。", likes: "6.2k" },
+  { id: "hotpot", name: "小锅串串", category: "夜宵推荐", photo: "food-xiaoguo-chuanchuan.jpg", tags: ["麻辣鲜香", "越煮越入味"], time: "18:00—23:30", way: "荤素搭配，慢慢涮", highlight: "锅多味，麻辣鲜香", text: "锅多味，麻辣鲜香，越煮越入味。", likes: "5.9k" },
+  { id: "cold", name: "蘸凉粉", category: "本地经典", photo: "food-zhan-liangfen.jpg", tags: ["清爽", "咸香"], time: "11:00—18:00", way: "蘸汁浓一点更香", highlight: "清香爽滑，独特的山风风味", text: "奔爽凉粉，清香爽滑，独特的山风风味。", likes: "5.3k" },
 ];
 
 type ArchitecturePlace = {
@@ -94,22 +83,46 @@ type ArchitecturePlace = {
 };
 
 const architectureGroups = [
-  { title: "会馆与大院", items: ["guild", "li", "square"] },
-  { title: "老街与巷子", items: ["old-street", "doujie", "alley"] },
-  { title: "城门与人文", items: ["gate", "quma", "wenmiao"] },
+  { title: "会馆与大院", items: ["guild", "li", "shaanxi-guild", "guizhou-guild", "chijia-courtyard"] },
+  { title: "老街与巷子", items: ["square", "old-street", "huaiyuan-street", "doujie", "alley"] },
+  { title: "城门与人文", items: ["gate", "quma", "wenmiao", "jiangliangfu-home", "kuixing-pavilion"] },
 ];
 
 const architectureItems: ArchitecturePlace[] = [
   { id: "guild", name: "广东会馆", group: "会馆与大院", photo: "arch-guildhall.jpg", description: "清代商帮集资所建，木雕石刻精美，戏楼飞檐恢宏，见证昭通商脉与文化交融。", tags: ["商帮文化", "戏楼", "木雕", "石刻"], tip: "看建筑细节、拍屋檐和会馆门楼，感受商帮文化与精湛工艺。", cardText: "会馆庭院，雕梁画栋，气度不凡。" },
-  { id: "li", name: "李氏支祠", group: "会馆与大院", photo: "arch-li-family.jpg", description: "古朴院落与戏台相映，木柱、窗棂和灯笼保留着老城院落的温润气息。", tags: ["祠堂", "戏台", "院落"], tip: "适合拍对称构图，阳光落在戏台时最有层次。", cardText: "古建戏台，灯笼映光，院落安静。" },
-  { id: "square", name: "辕门口", group: "会馆与大院", photo: "arch-square.jpeg", description: "老城中心的开阔节点，街巷、人流与牌坊在这里交汇。", tags: ["广场", "街巷", "人文"], tip: "傍晚来这里看人来人往，最能感受古城日常。", cardText: "城市中心，烟火往来，适合扫街。" },
-  { id: "old-street", name: "北正街", group: "老街与巷子", photo: "arch-old-street.jpg", description: "古城主街，店铺林立，烟火气十足，街面透着昭通人的日常节奏。", tags: ["拍照", "夜游", "逛吃"], tip: "沿街慢走，拍门头、灯笼和行人，画面更有故事感。", cardText: "古城主街，店铺林立，烟火气十足。" },
+  { id: "li", name: "李氏支祠", group: "会馆与大院", photo: "arch-li-family.jpg", description: "清光绪年间实业家李耀庭所建二进祠堂，木构梁柱古朴厚重，古戏台常年上演庭院实景剧，承载李氏家族百年商道文脉。", tags: ["祠堂文化", "庭院戏剧", "木雕古建", "商儒文脉"], tip: "参观祠堂碑刻与木刻古籍，傍晚观看实景话剧，在天井庭院拍摄古风人像。", cardText: "二进祠堂，木构厚重，百年商道藏在院落与戏台之间。" },
+  { id: "shaanxi-guild", name: "陕西会馆", group: "会馆与大院", photo: "arch-guildhall.jpg", description: "清乾隆陕商集资修建三进院落，又称关帝庙，碑刻记载山陕商训，飞檐戏楼规制宏大，见证滇铜商贸往来。", tags: ["山陕商帮", "关帝文化", "古戏楼", "石刻碑记"], tip: "细读会馆商训石碑，拍摄对称院落全景，细看梁柱精美木雕纹样。", cardText: "陕商会馆与关帝信仰相连，戏楼飞檐里有旧时商路回声。" },
+  { id: "guizhou-guild", name: "贵州会馆", group: "会馆与大院", photo: "arch-guildhall.jpg", description: "乾隆黔商共建，旧名忠烈宫、黑神庙，院落雅致清幽，融合黔滇两地建筑特色，记录旧时山货药材商贸历史。", tags: ["黔商文化", "古戏台遗存", "中式院落", "乡土文脉"], tip: "漫步回廊感受静谧庭院，寻找老照片复刻点位，了解黔滇通商往事。", cardText: "清幽院落连着黔滇商路，适合慢慢看回廊与戏台遗存。" },
+  { id: "chijia-courtyard", name: "迟家大院", group: "会馆与大院", photo: "arch-li-family.jpg", description: "民国昭通首富私宅，前院中式天井雕花门窗，后院西式拱廊洋楼，中西合璧独一无二，内设非遗体验工坊。", tags: ["中西合璧", "民国老宅", "天井民居", "非遗体验"], tip: "打卡中西建筑碰撞机位，体验甲马印制、剪纸非遗，逛老宅花园与绣楼。", cardText: "中式天井与西式拱廊并置，民国老宅里藏着非遗体验。" },
+  { id: "square", name: "辕门口", group: "老街与巷子", photo: "arch-square.jpeg", description: "古城城市中轴线核心，旧时镇署衙门所在地，矗立抗战出征纪念碑与百年钟楼，是老城政治商贸文化交汇中心。", tags: ["古城中心", "红色历史", "钟楼地标", "衙署旧址"], tip: "打卡钟楼全景，细读共赴国难纪念碑，站制高点俯瞰全城街巷肌理。", cardText: "钟楼、纪念碑与旧衙署记忆交汇，是老城中轴线的核心节点。" },
+  { id: "old-street", name: "北正街", group: "老街与巷子", photo: "arch-old-street.jpg", description: "古城主干道，沿街保留老式骑楼商铺，新旧商铺交融，连通多座会馆街巷，烟火气与古建筑交织。", tags: ["老城商街", "骑楼建筑", "市井烟火", "街巷串联"], tip: "沿街逛特色小店，拍摄骑楼复古街景，串联周边会馆步行游览。", cardText: "骑楼商铺与烟火日常沿街展开，是串联会馆与巷子的主线。" },
+  { id: "huaiyuan-street", name: "怀远街", group: "老街与巷子", photo: "arch-old-street.jpg", description: "古城网红商业街，标志性过街骑楼横跨街巷，两侧文创、茶馆云集，是古城人流核心打卡地。", tags: ["过街骑楼", "网红街巷", "文创市集", "休闲茶馆"], tip: "过街楼正下方居中打卡，逛文创小店，街边茶馆歇脚看往来行人。", cardText: "过街骑楼横跨街巷，文创小店和茶馆把老街变得热闹。" },
   { id: "doujie", name: "陡街", group: "老街与巷子", photo: "arch-doujie.jpg", description: "石阶古街，曲折上行，老建筑与街招一起构成复古街景。", tags: ["拍照", "慢逛", "街景"], tip: "低机位顺着坡度拍，纵深感最强。", cardText: "石阶古街，曲折上行，别有韵味。" },
   { id: "alley", name: "挑水巷", group: "老街与巷子", photo: "tiaoshuixiang-stone-alley.jpg", description: "青石板路与窄巷相连，安静、清爽，适合寻找古城慢生活。", tags: ["小巷", "青石", "慢行"], tip: "雨后或清晨光线柔和，巷子更有层次。", cardText: "老巷幽深，青石板路，静谧清幽。" },
   { id: "gate", name: "抚镇门", group: "城门与人文", photo: "arch-gate.jpg", description: "古城城门与石牌坊相接，线条稳重，是城市记忆的重要入口。", tags: ["城门", "牌坊", "历史"], tip: "正面取景，把城门、道路和天空一起纳入画面。", cardText: "古城阙门，城楼巍峨，登楼望城。" },
   { id: "quma", name: "趣马门", group: "城门与人文", photo: "arch-quma-gate.jpeg", description: "城门楼阁舒展，飞檐层叠，城墙厚重，是进入古城气韵的一眼开场。", tags: ["城门", "楼阁", "拍照"], tip: "适合正面取景，把城门、道路和天空一起纳入画面，气势最完整。", cardText: "楼阁巍峨，城门开阔，第一眼很震撼。" },
   { id: "wenmiao", name: "文庙", group: "城门与人文", photo: "arch-wenmiao.jpg", description: "红墙、飞檐与文脉空间相连，是古城里最有书卷气的建筑片段。", tags: ["文庙", "红墙", "人文"], tip: "拍红墙与飞檐的局部，画面干净又有古意。", cardText: "近代学堂故居，书香门第，文脉悠长。" },
+  { id: "jiangliangfu-home", name: "姜亮夫故居", group: "城门与人文", photo: "arch-wenmiao.jpg", description: "国学大师姜亮夫旧居，小巧静谧四合院，陈列先生著作与生平史料，书香满院，文脉厚重。", tags: ["名人故居", "国学文脉", "四合院", "文史展馆"], tip: "安静品读先生生平展，庭院内拍摄书香氛围感照片，感受文人风骨。", cardText: "小巧四合院里陈列文史著作，书香气从院落里慢慢铺开。" },
+  { id: "kuixing-pavilion", name: "魁星阁", group: "城门与人文", photo: "arch-wenmiao.jpg", description: "文庙配套清代古建，攒尖飞檐楼阁，古时学子祈福金榜题名之地，小巧精致，文脉寓意浓厚。", tags: ["科举文化", "文昌楼阁", "文庙配套", "古风小景"], tip: "拍摄楼阁飞檐特写，了解古代科举文化，与文庙建筑群联动游览。", cardText: "攒尖飞檐小巧精致，科举祈福的寓意很适合和文庙一起看。" },
 ];
+
+const architectureMapSpotIds: Record<string, string> = {
+  guild: "culture-guildhall-guangdong",
+  li: "culture-li-family",
+  "shaanxi-guild": "culture-shaanxi-guildhall",
+  "guizhou-guild": "culture-guizhou-guildhall",
+  "chijia-courtyard": "culture-chijia-courtyard",
+  square: "culture-yuanmenkou",
+  "old-street": "culture-beizheng-street",
+  "huaiyuan-street": "culture-huaiyuan-street",
+  doujie: "culture-doujie",
+  alley: "culture-tiaoshui-alley",
+  gate: "culture-fuzhen-gate",
+  quma: "culture-quma-gate",
+  wenmiao: "culture-wenmiao",
+  "jiangliangfu-home": "culture-jiangliangfu-home",
+  "kuixing-pavilion": "culture-kuixing-pavilion",
+};
 
 type CinemaPost = {
   id: string;
@@ -130,7 +143,7 @@ const cinemaPosts: CinemaPost[] = [
   { id: "wenmiao-night", title: "夜晚的文庙", place: "文庙广场", photo: "ancient-building-night.jpg", text: "灯光一亮，整个文庙都变得很有氛围感，超美！", category: "夜景", likes: 672, author: "阿飞的旅行", time: "5小时前", top: 2 },
   { id: "skewer", title: "昭通小肉串！", place: "昭通古城美食街", photo: "food-meat-skewer.jpg", text: "炭火烤得滋滋香，小肉串配特色蘸料，绝了！", category: "美食", likes: 548, author: "吃货小圆", time: "6小时前", top: 3 },
   { id: "old-lane", title: "藏在巷子里的时光", place: "太平街小巷", photo: "old-street-walk.jpg", text: "慢慢走、慢慢看，仿佛回到了旧时光里。", category: "小巷", likes: 233, author: "时光漫步", time: "1天前" },
-  { id: "rice", title: "油糕稀豆粉真香！", place: "昭通古城小吃店", photo: "food-oil-cake-pea-paste.jpg", text: "一口油糕，一口稀豆粉，暖心又满足～", category: "美食", likes: 412, author: "豆豆爱吃", time: "1天前" },
+  { id: "rice", title: "油糕稀豆粉真香！", place: "昭通古城小吃店", photo: "cinema-oil-cake-pea-paste.jpg", text: "一口油糕，一口稀豆粉，暖心又满足～", category: "美食", likes: 412, author: "豆豆爱吃", time: "1天前" },
   { id: "gate", title: "登高望古城", place: "城墙观景台", photo: "stone-paifang.jpg", text: "站在城墙上俯瞰古城，层层叠叠的屋檐太壮观了！", category: "古建筑", likes: 389, author: "山城漫游者", time: "2天前" },
 ];
 
@@ -254,7 +267,7 @@ function HomePageReal() {
         <Link className="feature-card interactive-card map-card" to="/map" aria-label="进入古城手绘地图">
           <span className="sticker">手绘导览</span>
           <div className="feature-copy">
-            <h2>古城手绘地图</h2>
+            <h2>古城地图</h2>
             <p>美食点、古建点、拍照点、夜游点一图掌握，导航不迷路！</p>
           </div>
           <div className="feature-art map-art">
@@ -311,122 +324,818 @@ function HomePageReal() {
 
       {tipsOpen && (
         <Modal title="游玩贴士" onClose={() => setTipsOpen(false)}>
-          建议上午逛老街和建筑，下午吃小吃、拍照，傍晚留给灯火亮起后的古城夜游。
+          <div className="tips-long-copy">
+            <p>来昭通古城不要抱着“逛大景区”的心态，它最舒服的玩法不是赶景点，而是慢慢钻巷子。建议下午四五点左右来，光线没那么晒，青瓦屋檐、老院子和街边小摊都比较有味道，拍照也比正午好看。</p>
+            <p>路线可以从趣马门附近开始，先沿着老街随便走一走，再往挑水巷方向逛。挑水巷里面藏着不少老建筑，迟家大院、广东会馆都值得进去看看。广东会馆不是那种特别大的景点，但门楼、戏台、木雕和院子的细节很耐看，适合慢慢拍，不要只在门口打个卡就走。</p>
+            <p>如果想拍照，建议避开最热闹的主街，多往小巷里面走。昭通古城真正好看的地方，往往不是最显眼的牌坊，而是转角处的青石板路、老墙、木门、屋檐和晒太阳的老人。穿浅色衣服、复古一点的衣服会比较出片。</p>
+            <p>吃东西可以从早上的油糕稀豆粉开始，热乎乎的很有昭通味道。下午可以试试烧洋芋、凉粉，晚上再去吃小肉串。古城最有烟火气的时候其实是傍晚以后，灯慢慢亮起来，人也多起来，边走边吃会比白天更有感觉。</p>
+            <p>需要注意的是，古城街巷不算特别大，不建议把行程安排得太满。留两三个小时慢慢逛刚刚好，如果还要拍照、吃东西，可以安排半天。下雨天青石板会有点滑，穿舒服一点的鞋；有些老建筑内部空间不大，拍照的时候尽量别大声喧哗，也不要触碰木雕、墙面和展陈。</p>
+            <p>总的来说，昭通古城不是那种一眼惊艳的地方，但它越逛越有味道。它好看的地方在生活感里：巷子里的风、老院子的光、烤洋芋的香味，还有本地人慢悠悠的日常。想真正感受昭通古城，别急，慢慢走就对了。</p>
+          </div>
         </Modal>
       )}
     </main>
   );
 }
 
+type MapFilter = "全部" | "美食店铺" | FoodMapCategory | CultureMapCategory;
+
+type MapDisplaySpot = {
+  id: string;
+  kind: "food" | "culture";
+  name: string;
+  street: string;
+  address: string;
+  categories: string[];
+  primaryCategory: string;
+  feature: string;
+  openTime: string;
+  photoTip: string;
+  interview: string;
+  duration: string;
+  fallback?: [number, number];
+  geocodeKeyword: string;
+  image?: string;
+};
+
+type ResolvedMapSpot = MapDisplaySpot & {
+  lng?: number;
+  lat?: number;
+  geocodeStatus: "matched" | "fallback" | "pending";
+  resolvedAddress?: string;
+};
+
+const mapFilterItems: MapFilter[] = [
+  "全部",
+  "美食店铺",
+  ...foodMapCategories.filter((item): item is FoodMapCategory => item !== "全部"),
+  ...cultureMapCategories,
+];
+
+function toFoodDisplaySpot(spot: FoodMapSpot): MapDisplaySpot {
+  return {
+    ...spot,
+    kind: "food",
+    categories: [...spot.categories],
+  };
+}
+
+function toCultureDisplaySpot(spot: CultureMapSpot): MapDisplaySpot {
+  return {
+    id: spot.id,
+    kind: "culture",
+    name: spot.name,
+    street: spot.category,
+    address: spot.address,
+    categories: [spot.category],
+    primaryCategory: spot.category,
+    feature: spot.feature,
+    openTime: spot.openTime,
+    photoTip: spot.photoTip,
+    interview: spot.interview,
+    duration: spot.duration,
+    geocodeKeyword: spot.geocodeKeyword,
+    image: spot.image,
+  };
+}
+
 function MapPage() {
-  const [filter, setFilter] = useState("全部");
-  const [selectedId, setSelectedId] = useState("guild");
-  const filters = ["全部", "美食点", "古建点", "拍照点", "夜游点"];
-  const visible = filter === "全部" ? mapSpots : mapSpots.filter((spot) => spot.category === filter);
-  const selected = useMemo(() => mapSpots.find((spot) => spot.id === selectedId) ?? mapSpots[0], [selectedId]);
-  const routeSpots = ["beizheng", "guild", "wenmiao", "quma", "doujie"]
-    .map((id) => mapSpots.find((spot) => spot.id === id))
-    .filter(Boolean) as Spot[];
+  const [searchParams] = useSearchParams();
+  const foodDisplaySpots = useMemo(() => foodMapSpots.map(toFoodDisplaySpot), []);
+  const cultureDisplaySpots = useMemo(() => cultureMapSpots.map(toCultureDisplaySpot), []);
+  const allSpots = useMemo(() => [...foodDisplaySpots, ...cultureDisplaySpots], [foodDisplaySpots, cultureDisplaySpots]);
+  const requestedSpotId = searchParams.get("spot") ?? "";
+  const requestedSpot = useMemo(() => allSpots.find((spot) => spot.id === requestedSpotId), [allSpots, requestedSpotId]);
+  const [filter, setFilter] = useState<MapFilter>(() => requestedSpot ? requestedSpot.primaryCategory as MapFilter : "全部");
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState(() => requestedSpot?.id ?? foodMapSpots[0].id);
+  const [routeNotice, setRouteNotice] = useState("沿着北正街、陡街、崇义街和挑水巷，把一天的烟火味慢慢串起来。");
+  const searchText = query.trim().toLowerCase();
+
+  useEffect(() => {
+    if (!requestedSpotId) return;
+    if (!requestedSpot) {
+      setFilter("全部");
+      setQuery("");
+      setSelectedId(foodMapSpots[0].id);
+      return;
+    }
+    setFilter(requestedSpot.primaryCategory as MapFilter);
+    setQuery("");
+    setSelectedId(requestedSpot.id);
+  }, [requestedSpotId, requestedSpot]);
+
+  const visibleMapSpots = useMemo(() => {
+    const filtered = allSpots.filter((spot) => {
+      const categoryMatched =
+        filter === "全部"
+        || (filter === "美食店铺" && spot.kind === "food")
+        || spot.categories.includes(filter);
+      if (!categoryMatched) return false;
+      if (!searchText) return true;
+      return [
+        spot.name,
+        spot.street,
+        spot.address,
+        spot.feature,
+        spot.photoTip,
+        spot.interview,
+        spot.categories.join(" "),
+      ].some((value) => value.toLowerCase().includes(searchText));
+    });
+    return filtered;
+  }, [allSpots, filter, searchText]);
+
+  const selected = useMemo(() => (
+    allSpots.find((spot) => spot.id === selectedId)
+    ?? visibleMapSpots[0]
+    ?? foodDisplaySpots[0]
+  ), [allSpots, selectedId, visibleMapSpots, foodDisplaySpots]);
+
+  const navigateToSpot = (spot: MapDisplaySpot) => {
+    if (!spot.fallback) {
+      window.open(`https://uri.amap.com/search?keyword=${encodeURIComponent(`昭通市昭阳区${spot.name}`)}&src=zhaotong-food-map`, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const [lng, lat] = spot.fallback;
+    window.open(`https://uri.amap.com/navigation?to=${lng},${lat},${encodeURIComponent(spot.name)}&mode=walk&policy=1&src=zhaotong-food-map`, "_blank", "noopener,noreferrer");
+  };
+
+  const chooseRouteSpot = (spotId: string) => {
+    setFilter("全部");
+    setQuery("");
+    setSelectedId(spotId);
+    const spot = foodDisplaySpots.find((item) => item.id === spotId);
+    if (spot) {
+      setRouteNotice(`已聚焦「${spot.name}」，可以从地图 marker 或右侧卡片继续导航。`);
+    }
+  };
 
   return (
-    <main className="map-page">
+    <main className="map-page food-map-page">
       <header className="map-top-nav">
         <Link className="map-logo" to="/">
           <strong>昭通古城</strong>
-          <span>印象昭通</span>
+          <span>烟火美食路线</span>
         </Link>
-        <nav aria-label="古城手绘地图导航">
+        <nav aria-label="古城美食地图导航">
           <Link to="/">首页</Link>
-          <Link className="active" to="/map">古城导览</Link>
-          <Link to="/architecture">游玩推荐</Link>
-          <Link to="/cinema">实用攻略</Link>
-          <Link to="/food">关于我们</Link>
+          <Link className="active" to="/map">古城地图</Link>
+          <Link to="/food">味道图鉴</Link>
         </nav>
       </header>
 
-      <section className="map-page-title">
-        <h1>古城手绘地图</h1>
-        <p>美食点、古建点、拍照点、夜游点，一图掌握，导览不迷路。</p>
+      <section className="map-page-title food-map-title">
+        <span>手账美食地图</span>
+        <h1>昭通古城烟火美食路线</h1>
+        <p>22家特色小吃店与15个古建、街巷、城门、人文点位同图展示，边吃边逛更顺路。</p>
       </section>
 
-      <section className="map-dashboard">
-        <aside className="map-filter-card">
-          <div className="map-filter-buttons">
-            {filters.map((item) => (
-              <button className={filter === item ? "active" : ""} type="button" onClick={() => setFilter(item)} key={item}>
-                <span>{item === "全部" ? "🏯" : item === "美食点" ? "♨" : item === "古建点" ? "▦" : item === "拍照点" ? "📷" : "☾"}</span>
+      <section className="map-dashboard food-map-dashboard">
+        <aside className="map-filter-card food-map-filter-card">
+          <label className="map-search-box">
+            <span>搜索</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="凉粉 / 北正街 / 夜宵 / 烧洋芋"
+            />
+          </label>
+
+          <div className="map-filter-buttons food-map-filter-buttons" aria-label="地图点位筛选">
+            {mapFilterItems.map((item) => {
+              const color = item === "全部"
+                ? "#8a613f"
+                : item === "美食店铺"
+                  ? "#d96332"
+                  : (foodCategoryColor[item as FoodMapCategory] ?? cultureCategoryColor[item as CultureMapCategory]);
+              return (
+              <button
+                className={filter === item ? "active" : ""}
+                type="button"
+                onClick={() => {
+                  setFilter(item);
+                  setQuery("");
+                  const firstInCategory = item === "全部"
+                    ? allSpots[0]
+                    : item === "美食店铺"
+                      ? allSpots.find((spot) => spot.kind === "food")
+                      : allSpots.find((spot) => spot.categories.includes(item));
+                  if (firstInCategory) setSelectedId(firstInCategory.id);
+                }}
+                key={item}
+              >
+                <i style={{ background: color }} />
                 {item}
               </button>
+            );})}
+          </div>
+
+          <div className="map-legend food-map-legend">
+            <h2>点位图例</h2>
+            {foodMapCategories.filter((item): item is FoodMapCategory => item !== "全部").map((item) => (
+              <p key={item}><i className="legend-dot" style={{ background: foodCategoryColor[item] }} />{item}</p>
+            ))}
+            {cultureMapCategories.map((item) => (
+              <p key={item}><i className="legend-dot" style={{ background: cultureCategoryColor[item] }} />{item}</p>
             ))}
           </div>
-          <div className="map-legend">
-            <h2>图例说明</h2>
-            <p><i className="legend-dot building" />古建点</p>
-            <p><i className="legend-dot food" />美食点</p>
-            <p><i className="legend-dot photo" />拍照点</p>
-            <p><i className="legend-dot night" />夜游点</p>
-            <p><i className="legend-line" />主干道</p>
-          </div>
+
+          <p className="map-filter-note">当前显示 <strong>{visibleMapSpots.length}</strong> 个点位。筛选后地图会自动缩放到可见点位范围。</p>
         </aside>
 
-        <section className="map-canvas-card" aria-label="昭通古城手绘地图">
-          <img className="map-illustration" src={mapAsset("zhaotong-handdrawn-map-base.svg")} alt="昭通古城导览地图" />
-          <img className="map-compass-deco" src={mapAsset("map-compass.png")} alt="" />
-          {visible.map((spot) => (
-            <button
-              className={`map-pin ${selected.id === spot.id ? "active" : ""}`}
-              data-category={spot.category}
-              style={{ left: `${spot.x}%`, top: `${spot.y}%` }}
-              type="button"
-              onClick={() => setSelectedId(spot.id)}
-              key={spot.id}
-            >
-              <MapPin weight="fill" />
-              <span>{spot.name}</span>
-            </button>
-          ))}
+        <section className="map-canvas-card food-map-canvas-card" aria-label="昭通古城烟火美食高德地图">
+          <AmapCanvas spots={visibleMapSpots} selectedId={selected.id} onSelect={setSelectedId} />
+          {visibleMapSpots.length === 0 && (
+            <div className="map-empty-state">
+              <h2>没有找到对应点位</h2>
+              <p>试试搜索“凉粉”“北正街”“文庙”“城门”或者切回全部。</p>
+            </div>
+          )}
         </section>
 
-        <article className="map-side-card">
+        <article className="map-side-card food-detail-card">
           <header>
             <h2>{selected.name}</h2>
-            <span>{selected.category}</span>
+            <div className="food-detail-tags">
+              {selected.categories.map((item) => (
+                <span
+                  style={{ background: foodCategoryColor[item as FoodMapCategory] ?? cultureCategoryColor[item as CultureMapCategory] }}
+                  key={item}
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
           </header>
-          <img src={cardPhoto(selected.photo)} alt={selected.name} />
-          <p>{selected.desc}</p>
+          <p className="food-detail-address"><MapPin weight="fill" />{selected.address}</p>
+          <p className="food-detail-feature">{selected.feature}</p>
           <ul>
-            <li><span>◷</span><b>推荐时长</b>{selected.duration}</li>
-            <li><span>◴</span><b>开放时间</b>{selected.openTime}</li>
-            <li><span>♙</span><b>适合人群</b>{selected.audience}</li>
+            <li><span>◷</span><b>{selected.kind === "food" ? "营业时间" : "开放时间"}</b>{selected.openTime}</li>
+            <li><span>◎</span><b>{selected.kind === "food" ? "推荐拍摄" : "推荐看点"}</b>{selected.photoTip}</li>
+            <li><span>✎</span><b>{selected.kind === "food" ? "采访角度" : "文化线索"}</b>{selected.interview}</li>
+            <li><span>⌁</span><b>停留时长</b>{selected.duration}</li>
           </ul>
-          <button className="map-primary-action" type="button">查看详情 <ArrowRight weight="bold" /></button>
-          <button className="map-secondary-action" type="button">加入路线 ＋</button>
+          <div className="food-detail-actions">
+            <button className="map-primary-action" type="button" onClick={() => setRouteNotice(`「${selected.name}」适合拍：${selected.photoTip}`)}>查看详情 <ArrowRight weight="bold" /></button>
+            <button className="map-secondary-action" type="button" onClick={() => setRouteNotice(`已把「${selected.name}」加入你的烟火美食路线。`)}>加入路线 ＋</button>
+            <button className="map-secondary-action" type="button" onClick={() => navigateToSpot(selected)}>导航到这里</button>
+          </div>
         </article>
       </section>
 
-      <section className="map-route-panel">
-        <div className="map-route-stone">
-          <strong>昭通<br />古城</strong>
-          <span>千年文脉 · 滇川明珠</span>
+      <section className="map-route-panel food-route-timeline-panel">
+        <div className="route-title food-route-title">
+          <span>一日路线</span>
+          <h2>昭通古城烟火美食一日路线</h2>
+          <p>{routeNotice}</p>
         </div>
-        <div className="route-title">
-          <h2>推荐路线</h2>
+        <div className="food-route-timeline" aria-label="昭通古城烟火美食一日路线">
+          {foodRouteTimeline.map((item, index) => {
+            const targetId = item.spotIds[0];
+            const isActive = item.spotIds.includes(selected.id);
+            return (
+              <button
+                className={isActive ? "active" : ""}
+                type="button"
+                onClick={() => chooseRouteSpot(targetId)}
+                key={item.id}
+              >
+                <b>{String(index + 1).padStart(2, "0")}</b>
+                <strong>{item.time}</strong>
+                <span>{item.title}</span>
+                <em style={{ background: foodCategoryColor[item.tag] }}>{item.tag}</em>
+              </button>
+            );
+          })}
         </div>
-        <div className="map-route-list">
-          {routeSpots.map((spot, index) => (
-            <button type="button" onClick={() => setSelectedId(spot.id)} key={spot.id}>
-              <b>{index + 1}</b>
-              <img src={cardPhoto(spot.photo)} alt="" />
-              <span>{spot.name}</span>
-              {index < routeSpots.length - 1 && <i>→</i>}
-            </button>
-          ))}
-        </div>
-        <button className="map-full-route" type="button">查看完整路线</button>
       </section>
 
-      <p className="map-tip">小贴士：点击地图上的标记点，可查看详情；筛选左侧类别可快速定位想去的地点。</p>
+      <p className="map-tip food-map-tip">高德搜索/地理编码限定为云南省昭通市昭阳区；美食点位原数据保持不变，新增古建街巷点位匹配不到精确位置时使用对应街区备用坐标。</p>
     </main>
+  );
+}
+
+function AmapCanvas({ spots, selectedId, onSelect }: { spots: MapDisplaySpot[]; selectedId: string; onSelect: (id: string) => void }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<any>(null);
+  const amapRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+  const userMarkerRef = useRef<any>(null);
+  const userAccuracyCircleRef = useRef<any>(null);
+  const locationWatchIdRef = useRef<number | null>(null);
+  const infoWindowRef = useRef<any>(null);
+  const expandedInfoIdRef = useRef<string | null>(null);
+  const walkingRef = useRef<any>(null);
+  const coordCacheRef = useRef<Record<string, ResolvedMapSpot>>({});
+  const onSelectRef = useRef(onSelect);
+  const [resolvedSpots, setResolvedSpots] = useState<ResolvedMapSpot[]>([]);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "missing-key" | "error">("loading");
+  const [locationStatus, setLocationStatus] = useState("地图加载后可点击定位，不会自动请求权限。");
+  const [routeStatus, setRouteStatus] = useState("");
+  const amapKey = import.meta.env.VITE_AMAP_KEY;
+
+  const convertGpsToAmap = (position: [number, number]) => new Promise<[number, number]>((resolve) => {
+    const AMap = amapRef.current;
+    if (!AMap?.convertFrom) {
+      resolve(position);
+      return;
+    }
+
+    AMap.convertFrom(position, "gps", (convertStatus: string, result: any) => {
+      const location = convertStatus === "complete" ? result?.locations?.[0] : null;
+      if (!location) {
+        resolve(position);
+        return;
+      }
+
+      resolve([
+        Number(location.lng ?? location.getLng?.()),
+        Number(location.lat ?? location.getLat?.()),
+      ]);
+    });
+  });
+
+  const applyUserPosition = (
+    position: [number, number],
+    accuracy?: number,
+    source: "browser" | "amap" = "browser",
+  ) => {
+    const AMap = amapRef.current;
+    const map = mapRef.current;
+    if (!AMap || !map) return;
+
+    setUserLocation(position);
+    const accuracyText = Number.isFinite(accuracy) ? `，精度约 ${Math.round(accuracy as number)} 米` : "";
+    setLocationStatus(source === "browser" ? `已定位到当前位置${accuracyText}` : `已使用高德定位${accuracyText}`);
+
+    if (!userMarkerRef.current) {
+      userMarkerRef.current = new AMap.Marker({
+        position,
+        content: '<div class="amap-user-marker">你在这里</div>',
+        offset: new AMap.Pixel(-36, -36),
+        zIndex: 30,
+      });
+      map.add(userMarkerRef.current);
+    } else {
+      userMarkerRef.current.setPosition(position);
+    }
+
+    if (Number.isFinite(accuracy) && (accuracy as number) > 0) {
+      if (!userAccuracyCircleRef.current) {
+        userAccuracyCircleRef.current = new AMap.Circle({
+          center: position,
+          radius: accuracy,
+          strokeColor: "#2f74d0",
+          strokeOpacity: 0.35,
+          strokeWeight: 1,
+          fillColor: "#2f74d0",
+          fillOpacity: 0.08,
+          zIndex: 4,
+        });
+        map.add(userAccuracyCircleRef.current);
+      } else {
+        userAccuracyCircleRef.current.setCenter(position);
+        userAccuracyCircleRef.current.setRadius(accuracy);
+      }
+    }
+
+    map.setZoomAndCenter(accuracy && accuracy > 800 ? 15 : 17, position);
+  };
+
+  const locateWithBrowser = () => new Promise<{ position: [number, number]; accuracy?: number } | null>((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords }) => {
+        const gpsPosition: [number, number] = [coords.longitude, coords.latitude];
+        const amapPosition = await convertGpsToAmap(gpsPosition);
+        resolve({ position: amapPosition, accuracy: coords.accuracy });
+      },
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  });
+
+  const locateWithAmap = () => new Promise<{ position: [number, number]; accuracy?: number } | null>((resolve) => {
+    const AMap = amapRef.current;
+    if (!AMap) {
+      resolve(null);
+      return;
+    }
+
+    const geolocation = new AMap.Geolocation({
+      enableHighAccuracy: true,
+      timeout: 15000,
+      zoomToAccuracy: false,
+      showButton: false,
+      showMarker: false,
+    });
+
+    geolocation.getCurrentPosition((geoStatus: string, result: any) => {
+      if (geoStatus !== "complete" || !result?.position) {
+        resolve(null);
+        return;
+      }
+
+      const position: [number, number] = [
+        Number(result.position.lng ?? result.position.getLng?.()),
+        Number(result.position.lat ?? result.position.getLat?.()),
+      ];
+      resolve({ position, accuracy: Number(result.accuracy) || undefined });
+    });
+  });
+
+  const locateUser = async () => {
+    if (!amapRef.current || !mapRef.current) return null;
+    setLocationStatus("正在定位...");
+
+    const browserLocation = await locateWithBrowser();
+    if (browserLocation) {
+      applyUserPosition(browserLocation.position, browserLocation.accuracy, "browser");
+      return browserLocation.position;
+    }
+
+    const amapLocation = await locateWithAmap();
+    if (amapLocation) {
+      applyUserPosition(amapLocation.position, amapLocation.accuracy, "amap");
+      return amapLocation.position;
+    }
+
+    setLocationStatus("定位失败，请允许浏览器定位权限后重试。");
+    return null;
+  };
+
+  const stopRealtimeLocation = () => {
+    if (locationWatchIdRef.current === null || !navigator.geolocation) return;
+    navigator.geolocation.clearWatch(locationWatchIdRef.current);
+    locationWatchIdRef.current = null;
+  };
+
+  const startRealtimeLocation = () => {
+    if (!amapRef.current || !mapRef.current) return;
+
+    if (!navigator.geolocation) {
+      locateUser();
+      return;
+    }
+
+    stopRealtimeLocation();
+    setLocationStatus("正在开启实时定位...");
+
+    locationWatchIdRef.current = navigator.geolocation.watchPosition(
+      async ({ coords }) => {
+        const gpsPosition: [number, number] = [coords.longitude, coords.latitude];
+        const amapPosition = await convertGpsToAmap(gpsPosition);
+        applyUserPosition(amapPosition, coords.accuracy, "browser");
+      },
+      async () => {
+        const amapLocation = await locateWithAmap();
+        if (amapLocation) {
+          applyUserPosition(amapLocation.position, amapLocation.accuracy, "amap");
+          return;
+        }
+        setLocationStatus("实时定位失败，请允许浏览器定位权限后重试。");
+      },
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 },
+    );
+  };
+
+  const zoomMap = (delta: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const currentZoom = Number(map.getZoom?.() ?? 16);
+    const nextZoom = Math.min(20, Math.max(3, currentZoom + delta));
+    map.setZoom(nextZoom);
+  };
+
+  const startRoute = async (spot: ResolvedMapSpot) => {
+    const AMap = amapRef.current;
+    const map = mapRef.current;
+    if (!AMap || !map) return;
+    if (!Number.isFinite(spot.lng) || !Number.isFinite(spot.lat)) {
+      setRouteStatus(`「${spot.name}」坐标待确认，暂时不能规划路线。`);
+      return;
+    }
+    const origin = userLocation ?? await locateUser();
+    if (!origin) {
+      setRouteStatus("无法获取当前位置，暂时不能规划路线。");
+      return;
+    }
+
+    walkingRef.current?.clear?.();
+    walkingRef.current = new AMap.Walking({
+      map,
+      hideMarkers: true,
+      isOutline: true,
+      outlineColor: "#fff2d6",
+    });
+    setRouteStatus(`正在规划到「${spot.name}」的步行路线...`);
+    walkingRef.current.search(origin, [spot.lng as number, spot.lat as number], (walkStatus: string) => {
+      if (walkStatus === "complete") setRouteStatus(`已生成到「${spot.name}」的步行路线`);
+      else setRouteStatus("路线规划失败，请稍后重试。");
+    });
+  };
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    if (!amapKey) {
+      setStatus("missing-key");
+      return;
+    }
+
+    let cancelled = false;
+    if (import.meta.env.VITE_AMAP_SECURITY_CODE) {
+      window._AMapSecurityConfig = { securityJsCode: import.meta.env.VITE_AMAP_SECURITY_CODE };
+    }
+
+    AMapLoader.load({
+      key: amapKey,
+      version: "2.0",
+      plugins: ["AMap.Scale", "AMap.ToolBar", "AMap.Geolocation", "AMap.Walking", "AMap.Geocoder", "AMap.PlaceSearch"],
+    })
+      .then((AMap) => {
+        if (cancelled || !containerRef.current) return;
+        amapRef.current = AMap;
+        mapRef.current = new AMap.Map(containerRef.current, {
+          center: [103.7185, 27.3382],
+          zoom: 16,
+          viewMode: "2D",
+          scrollWheel: true,
+          mapStyle: "amap://styles/fresh",
+        });
+        mapRef.current.addControl(new AMap.Scale());
+        mapRef.current.addControl(new AMap.ToolBar({ position: { right: "14px", top: "14px" } }));
+        infoWindowRef.current = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -34), isCustom: true });
+        setStatus("ready");
+      })
+      .catch(() => setStatus("error"));
+
+    return () => {
+      cancelled = true;
+      markersRef.current.forEach((marker) => marker.setMap(null));
+      markersRef.current = [];
+      walkingRef.current?.clear?.();
+      expandedInfoIdRef.current = null;
+      stopRealtimeLocation();
+      userAccuracyCircleRef.current?.setMap?.(null);
+      userMarkerRef.current?.setMap?.(null);
+      infoWindowRef.current?.close?.();
+      mapRef.current?.destroy?.();
+      mapRef.current = null;
+      amapRef.current = null;
+    };
+  }, [amapKey]);
+
+  useEffect(() => {
+    const AMap = amapRef.current;
+    if (!AMap || status !== "ready") return;
+
+    const geocoder = new AMap.Geocoder({ city: "云南省昭通市昭阳区" });
+    const placeSearch = new AMap.PlaceSearch({
+      city: "昭通市",
+      citylimit: true,
+      pageSize: 10,
+      extensions: "all",
+    });
+    let cancelled = false;
+    const pendingSpots: ResolvedMapSpot[] = spots.map((spot) => (
+      spot.kind === "food" && spot.fallback
+        ? { ...spot, lng: spot.fallback[0], lat: spot.fallback[1], geocodeStatus: "fallback" }
+        : { ...spot, geocodeStatus: "pending" }
+    ));
+    setResolvedSpots(pendingSpots);
+
+    const pointToLngLat = (point: any): [number, number] | null => {
+      const lng = Number(point?.lng ?? point?.getLng?.());
+      const lat = Number(point?.lat ?? point?.getLat?.());
+      return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : null;
+    };
+
+    const isInZhaoyang = (item: any) => {
+      const values = [
+        item?.adcode,
+        item?.adname,
+        item?.district,
+        item?.formattedAddress,
+        item?.address,
+        item?.pname,
+        item?.cityname,
+      ].map((value) => String(value ?? ""));
+      return values.some((value) => value.includes("昭阳区") || value.startsWith("530602"));
+    };
+
+    const resolveByGeocoder = (spot: MapDisplaySpot) => new Promise<ResolvedMapSpot | null>((resolve) => {
+      let settled = false;
+      let timer = 0;
+      const finish = (value: ResolvedMapSpot | null) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(value);
+      };
+      timer = window.setTimeout(() => finish(null), 4500);
+      geocoder.getLocation(spot.geocodeKeyword, (geoStatus: string, result: any) => {
+        const geocode = geoStatus === "complete" ? result?.geocodes?.[0] : null;
+        const location = geocode?.location;
+        const lngLat = pointToLngLat(location);
+        if (!lngLat || !isInZhaoyang(geocode)) {
+          finish(null);
+          return;
+        }
+        finish({
+          ...spot,
+          lng: lngLat[0],
+          lat: lngLat[1],
+          geocodeStatus: "matched",
+          resolvedAddress: geocode?.formattedAddress,
+        });
+      });
+    });
+
+    const resolveByPlaceSearch = (spot: MapDisplaySpot) => new Promise<ResolvedMapSpot | null>((resolve) => {
+      const keywords = [spot.geocodeKeyword, `昭阳区${spot.name}`, `昭通${spot.name}`];
+      let settled = false;
+      const finish = (value: ResolvedMapSpot | null) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      let index = 0;
+      const searchNext = () => {
+        const keyword = keywords[index];
+        if (!keyword) {
+          finish(null);
+          return;
+        }
+        index += 1;
+        let callbackSettled = false;
+        const timer = window.setTimeout(() => {
+          if (callbackSettled || settled) return;
+          callbackSettled = true;
+          searchNext();
+        }, 4500);
+        placeSearch.search(keyword, (poiStatus: string, result: any) => {
+          if (callbackSettled || settled) return;
+          callbackSettled = true;
+          window.clearTimeout(timer);
+          const pois = poiStatus === "complete" ? (result?.poiList?.pois ?? []) : [];
+          const poi = pois.find((item: any) => item?.location && isInZhaoyang(item));
+          const lngLat = pointToLngLat(poi?.location);
+          if (!poi || !lngLat) {
+            searchNext();
+            return;
+          }
+          finish({
+            ...spot,
+            lng: lngLat[0],
+            lat: lngLat[1],
+            geocodeStatus: "matched",
+            resolvedAddress: poi.address || poi.name,
+          });
+        });
+      };
+      searchNext();
+    });
+
+    const resolveSpot = async (spot: MapDisplaySpot): Promise<ResolvedMapSpot> => {
+      if (coordCacheRef.current[spot.id]) return coordCacheRef.current[spot.id];
+
+      if (spot.kind === "culture") {
+        const poiResult = await resolveByPlaceSearch(spot);
+        const geocoderResult = poiResult ?? await resolveByGeocoder(spot);
+        const resolved = geocoderResult ?? { ...spot, geocodeStatus: "pending" as const };
+        coordCacheRef.current[spot.id] = resolved;
+        return resolved;
+      }
+
+      const geocoderResult = await resolveByGeocoder(spot);
+      if (geocoderResult) {
+        coordCacheRef.current[spot.id] = geocoderResult;
+        return geocoderResult;
+      }
+
+      const resolved = spot.fallback
+        ? {
+          ...spot,
+          lng: spot.fallback[0],
+          lat: spot.fallback[1],
+          geocodeStatus: "fallback" as const,
+        }
+        : { ...spot, geocodeStatus: "pending" as const };
+      coordCacheRef.current[spot.id] = resolved;
+      return resolved;
+    };
+
+    Promise.all(spots.map(resolveSpot)).then((nextSpots) => {
+      if (cancelled) return;
+      setResolvedSpots(nextSpots);
+      const culturePendingCount = nextSpots.filter((spot) => spot.kind === "culture" && spot.geocodeStatus === "pending").length;
+      const cultureMatchedCount = nextSpots.filter((spot) => spot.kind === "culture" && spot.geocodeStatus === "matched").length;
+      setRouteStatus(
+        culturePendingCount
+          ? `高德已定位 ${cultureMatchedCount} 个新增景点，${culturePendingCount} 个坐标待确认，未放置错误 marker。`
+          : `15 个新增景点已通过高德 POI/地理编码定位。`,
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [spots, status]);
+
+  useEffect(() => {
+    const AMap = amapRef.current;
+    const map = mapRef.current;
+    if (!AMap || !map) return;
+
+    markersRef.current.forEach((marker) => marker.setMap(null));
+    const markerSpots = resolvedSpots.filter((spot) => Number.isFinite(spot.lng) && Number.isFinite(spot.lat));
+    markersRef.current = markerSpots.map((spot) => {
+      const markerNode = document.createElement("button");
+      markerNode.type = "button";
+      markerNode.className = `amap-spot-marker food-amap-marker ${spot.id === selectedId ? "active" : ""} ${expandedInfoIdRef.current === spot.id ? "expanded" : ""}`;
+      markerNode.dataset.category = spot.primaryCategory;
+      markerNode.dataset.name = `${spot.name}｜${spot.address}`;
+      markerNode.style.setProperty(
+        "--marker-color",
+        foodCategoryColor[spot.primaryCategory as FoodMapCategory] ?? cultureCategoryColor[spot.primaryCategory as CultureMapCategory],
+      );
+      markerNode.innerHTML = `<span></span><b>${spot.name}</b>`;
+      markerNode.addEventListener("click", () => {
+        onSelectRef.current(spot.id);
+        if (expandedInfoIdRef.current === spot.id) {
+          expandedInfoIdRef.current = null;
+          markerNode.classList.remove("expanded");
+          infoWindowRef.current?.close?.();
+          return;
+        }
+        expandedInfoIdRef.current = spot.id;
+        markersRef.current.forEach((marker) => {
+          const content = marker.getContent?.();
+          if (content instanceof HTMLElement) content.classList.remove("expanded");
+        });
+        markerNode.classList.add("expanded");
+        map.setZoomAndCenter(17, [spot.lng as number, spot.lat as number]);
+        const content = document.createElement("div");
+        content.className = "amap-route-popup food-amap-popup";
+        content.innerHTML = `<strong>${spot.name}</strong><small>${spot.primaryCategory} · ${spot.street}</small><p>${spot.address}</p><button type="button">导航到这里</button>`;
+        content.querySelector("button")?.addEventListener("click", () => startRoute(spot));
+        infoWindowRef.current?.setContent(content);
+        infoWindowRef.current?.open(map, [spot.lng as number, spot.lat as number]);
+      });
+
+      return new AMap.Marker({
+        position: [spot.lng as number, spot.lat as number],
+        content: markerNode,
+        offset: new AMap.Pixel(0, 0),
+        zIndex: spot.id === selectedId ? 25 : 10,
+      });
+    });
+
+    if (markersRef.current.length) {
+      map.add(markersRef.current);
+      map.setFitView(markersRef.current, false, [70, 70, 90, 70], 16);
+    }
+  }, [resolvedSpots, selectedId, status]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const selected = resolvedSpots.find((spot) => spot.id === selectedId);
+    if (!map || !selected || !Number.isFinite(selected.lng) || !Number.isFinite(selected.lat)) return;
+    map.setZoomAndCenter(17, [selected.lng as number, selected.lat as number]);
+  }, [resolvedSpots, selectedId]);
+
+  return (
+    <>
+      <div className="map-amap" ref={containerRef} />
+      {status === "loading" && (
+        <div className="map-amap-placeholder">
+          <h2>正在加载高德地图</h2>
+          <p>正在把 37 个美食、古建、街巷、城门与人文点位定位到昭通市昭阳区古城街巷。</p>
+        </div>
+      )}
+      {status === "missing-key" && (
+        <div className="map-amap-placeholder">
+          <h2>需要配置高德地图 Key</h2>
+          <p>在项目根目录新建或编辑 <code>.env</code>，填入 <code>VITE_AMAP_KEY=你的高德Web端Key</code>，然后重启开发服务器。</p>
+        </div>
+      )}
+      {status === "error" && (
+        <div className="map-amap-placeholder">
+          <h2>高德地图加载失败</h2>
+          <p>请检查 Web Key、服务平台类型和安全密钥配置。</p>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -450,12 +1159,8 @@ function FoodPage() {
         </Link>
         <nav aria-label="昭通味道图鉴导航">
           <Link to="/">首页</Link>
-          <Link to="/map">古城漫游</Link>
-          <Link to="/architecture">文化体验</Link>
           <Link className="active" to="/food">味道图鉴</Link>
-          <Link to="/cinema">旅宿攻略</Link>
-          <Link to="/cinema">活动资讯</Link>
-          <Link to="/map">实用信息</Link>
+          <Link to="/map">古城地图</Link>
         </nav>
         <div className="food-nav-actions">
           <button type="button">📍 我的位置</button>
@@ -586,9 +1291,7 @@ function ArchitecturePage() {
   const [activeId, setActiveId] = useState(architectureItems[0].id);
   const active = architectureItems.find((item) => item.id === activeId) ?? architectureItems[0];
   const placeById = useMemo(() => new Map(architectureItems.map((item) => [item.id, item])), []);
-  const funPlaces = ["old-street", "doujie", "alley", "gate", "li", "wenmiao"]
-    .map((id) => placeById.get(id))
-    .filter(Boolean) as ArchitecturePlace[];
+  const activeMapSpotId = architectureMapSpotIds[active.id];
   const routePlaces = ["gate", "old-street", "alley", "guild", "doujie"]
     .map((id) => placeById.get(id))
     .filter(Boolean) as ArchitecturePlace[];
@@ -628,7 +1331,13 @@ function ArchitecturePage() {
         </aside>
 
         <div className="arch-hero-photo">
-          <img src={architectureAsset(active.photo)} alt={active.name} />
+          <iframe
+            title="昭通古城VR全景"
+            src="https://www.720yun.com/vr/02cjtgtkkO8"
+            allow="fullscreen; gyroscope; accelerometer; xr-spatial-tracking"
+            allowFullScreen
+            loading="lazy"
+          />
         </div>
 
         <article className="arch-detail-card">
@@ -640,28 +1349,10 @@ function ArchitecturePage() {
           <h3>推荐玩法</h3>
           <p>{active.tip}</p>
           <div className="arch-actions">
-            <button type="button"><MapPin weight="fill" />查看位置</button>
+            <Link to={`/map?spot=${activeMapSpotId}`}><MapPin weight="fill" />查看位置</Link>
             <button type="button">加入路线 ＋</button>
           </div>
         </article>
-      </section>
-
-      <section className="arch-fun-section">
-        <header>
-          <h2>比较好玩的地点</h2>
-          <button type="button">查看更多地点 <ArrowRight /></button>
-        </header>
-        <div className="arch-place-grid">
-          {funPlaces.map((item) => (
-            <article className={active.id === item.id ? "active" : ""} key={item.id}>
-              <img src={architectureAsset(item.photo)} alt={item.name} />
-              <h3>{item.name}</h3>
-              <p>{item.cardText}</p>
-              <div>{item.tags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}</div>
-              <button type="button" onClick={() => setActiveId(item.id)}>查看详情 <ArrowRight /></button>
-            </article>
-          ))}
-        </div>
       </section>
 
       <section className="arch-route-section">
@@ -682,6 +1373,61 @@ function ArchitecturePage() {
       </section>
     </main>
   );
+}
+
+const MAX_STORED_IMAGE_BYTES = 650_000;
+const MAX_STORED_POSTS_BYTES = 2_500_000;
+const MAX_USER_POSTS = 24;
+
+function readBoundedJson<T>(key: string, fallback: T, maxLength = 500_000): T {
+  const raw = localStorage.getItem(key);
+  if (!raw) return fallback;
+  if (raw.length > maxLength) {
+    localStorage.removeItem(key);
+    return fallback;
+  }
+  return JSON.parse(raw) as T;
+}
+
+function writeStorageSoon(key: string, value: string) {
+  const timer = window.setTimeout(() => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Storage can be full when visitors upload large photos.
+    }
+  }, 120);
+  return () => window.clearTimeout(timer);
+}
+
+function resizeImageForStorage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const source = String(reader.result);
+      if (source.length <= MAX_STORED_IMAGE_BYTES) {
+        resolve(source);
+        return;
+      }
+
+      const image = new Image();
+      image.onerror = () => reject(new Error("image decode failed"));
+      image.onload = () => {
+        const maxSide = 1280;
+        const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d")?.drawImage(image, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.72));
+      };
+      image.src = source;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function CinemaPage() {
@@ -725,10 +1471,10 @@ function CinemaPage() {
 
   useEffect(() => {
     try {
-      setUserPosts(JSON.parse(localStorage.getItem(`${storagePrefix}:posts`) || "[]"));
-      setLikedIds(JSON.parse(localStorage.getItem(`${storagePrefix}:liked`) || "[]"));
-      setSavedIds(JSON.parse(localStorage.getItem(`${storagePrefix}:saved`) || "[]"));
-      setCommentsByPost(JSON.parse(localStorage.getItem(`${storagePrefix}:comments`) || "{}"));
+      setUserPosts(readBoundedJson<CinemaPost[]>(`${storagePrefix}:posts`, [], MAX_STORED_POSTS_BYTES).slice(0, MAX_USER_POSTS));
+      setLikedIds(readBoundedJson<string[]>(`${storagePrefix}:liked`, []));
+      setSavedIds(readBoundedJson<string[]>(`${storagePrefix}:saved`, []));
+      setCommentsByPost(readBoundedJson<Record<string, string[]>>(`${storagePrefix}:comments`, {}));
       const savedSort = localStorage.getItem(`${storagePrefix}:sort`);
       if (savedSort === "newest" || savedSort === "popular" || savedSort === "comments") setSortMode(savedSort);
       const savedCategory = localStorage.getItem(`${storagePrefix}:category`);
@@ -742,32 +1488,34 @@ function CinemaPage() {
 
   useEffect(() => {
     if (!storageReady) return;
-    localStorage.setItem(`${storagePrefix}:posts`, JSON.stringify(userPosts));
+    const payload = JSON.stringify(userPosts.slice(0, MAX_USER_POSTS));
+    if (payload.length > MAX_STORED_POSTS_BYTES) return;
+    return writeStorageSoon(`${storagePrefix}:posts`, payload);
   }, [storageReady, userPosts]);
 
   useEffect(() => {
     if (!storageReady) return;
-    localStorage.setItem(`${storagePrefix}:liked`, JSON.stringify(likedIds));
+    return writeStorageSoon(`${storagePrefix}:liked`, JSON.stringify(likedIds));
   }, [storageReady, likedIds]);
 
   useEffect(() => {
     if (!storageReady) return;
-    localStorage.setItem(`${storagePrefix}:saved`, JSON.stringify(savedIds));
+    return writeStorageSoon(`${storagePrefix}:saved`, JSON.stringify(savedIds));
   }, [storageReady, savedIds]);
 
   useEffect(() => {
     if (!storageReady) return;
-    localStorage.setItem(`${storagePrefix}:comments`, JSON.stringify(commentsByPost));
+    return writeStorageSoon(`${storagePrefix}:comments`, JSON.stringify(commentsByPost));
   }, [storageReady, commentsByPost]);
 
   useEffect(() => {
     if (!storageReady) return;
-    localStorage.setItem(`${storagePrefix}:sort`, sortMode);
+    return writeStorageSoon(`${storagePrefix}:sort`, sortMode);
   }, [storageReady, sortMode]);
 
   useEffect(() => {
     if (!storageReady) return;
-    localStorage.setItem(`${storagePrefix}:category`, category);
+    return writeStorageSoon(`${storagePrefix}:category`, category);
   }, [storageReady, category]);
 
   const toggleLike = (postId: string) => {
@@ -794,15 +1542,16 @@ function CinemaPage() {
     setSortOpen(false);
   };
 
-  const handlePreview = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePreview = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPreview(String(reader.result));
+    try {
+      const previewSource = await resizeImageForStorage(file);
+      setPreview(previewSource);
       setNotice("");
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      setNotice("Image preview failed. Please try a smaller JPG or PNG.");
+    }
   };
 
   const handlePublish = (event: React.FormEvent<HTMLFormElement>) => {
@@ -827,7 +1576,7 @@ function CinemaPage() {
       time: "刚刚",
       isNew: true,
     };
-    setUserPosts((posts) => [newPost, ...posts]);
+    setUserPosts((posts) => [newPost, ...posts].slice(0, MAX_USER_POSTS));
     setCategory("全部");
     setSortMode("newest");
     setVisibleCount(6);
@@ -1062,7 +1811,7 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
       <section className="dialog-card" role="dialog" aria-modal="true">
         <button aria-label="关闭" onClick={onClose}><X /></button>
         <h2>{title}</h2>
-        <p>{children}</p>
+        <div className="modal-body">{children}</div>
       </section>
     </div>
   );
